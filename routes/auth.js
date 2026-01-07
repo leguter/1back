@@ -101,5 +101,4 @@ router.post("/", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error during Telegram authentication" });
   }
 });
-
 module.exports = router;
