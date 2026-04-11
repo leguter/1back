@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id
+  username  String?
+  firstName String   @map("first_name")
+  createdAt DateTime @default(now()) @map("created_at")
+  orders    Order[]
+
+  @@map("users")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  price       Int
+  category    String
+  isSold      Boolean  @default(false) @map("is_sold")
+  createdAt   DateTime @default(now()) @map("created_at")
+  orders      Order[]
+
+  @@map("products")
+}
+
+enum OrderStatus {
+  pending
+  paid
+  failed
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  userId    String      @map("user_id")
+  productId String      @map("product_id")
+  status    OrderStatus @default(pending)
+  createdAt DateTime    @default(now()) @map("created_at")
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  payments  Payment[]
+
+  @@index([userId])
+  @@index([productId])
+  @@map("orders")
+}
+
+model Payment {
+  id                      String   @id @default(cuid())
+  orderId                 String   @map("order_id")
+  provider                String   @default("telegram")
+  status                  String
+  telegramPaymentChargeId String?  @unique @map("telegram_payment_charge_id")
+  createdAt               DateTime @default(now()) @map("created_at")
+  order                   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("payments")
+}
