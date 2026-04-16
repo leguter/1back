@@ -17,12 +17,11 @@ loadEnv();
 
 const app = express();
 
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: process.env.BASE_URL || 'https://account-martk.vercel.app',
+  credentials: true
+}));
+
 app.use(express.json());
 
 // Auth
