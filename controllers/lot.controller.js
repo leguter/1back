@@ -1,7 +1,7 @@
 const { z } = require("zod");
-const { listProducts, getProductById, createProduct } = require("../services/product.service");
+const { listLots, getLotById, createLot } = require("../services/lot.service");
 
-const createProductBodySchema = z.object({
+const createLotBodySchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(5000),
   price: z.number().int().positive(),
@@ -10,8 +10,8 @@ const createProductBodySchema = z.object({
 
 async function getAll(req, res, next) {
   try {
-    const products = await listProducts();
-    res.json({ success: true, products });
+    const lots = await listLots();
+    res.json({ success: true, lots });
   } catch (e) {
     next(e);
   }
@@ -19,8 +19,8 @@ async function getAll(req, res, next) {
 
 async function getOne(req, res, next) {
   try {
-    const product = await getProductById(req.params.id);
-    res.json({ success: true, product });
+    const lot = await getLotById(req.params.id);
+    res.json({ success: true, lot });
   } catch (e) {
     next(e);
   }
@@ -28,8 +28,8 @@ async function getOne(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    const product = await createProduct(req.validated.body);
-    res.status(201).json({ success: true, product });
+    const lot = await createLot(req.user.sub, req.validated.body);
+    res.status(201).json({ success: true, lot });
   } catch (e) {
     next(e);
   }
@@ -39,5 +39,5 @@ module.exports = {
   getAll,
   getOne,
   create,
-  createProductBodySchema,
+  createLotBodySchema,
 };

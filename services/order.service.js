@@ -1,55 +1,157 @@
 const { prisma } = require("../utils/prisma");
 const { AppError } = require("../utils/AppError");
+const chatService = require("./chat.service");
+const transactionService = require("./transaction.service");
 
-async function createOrder(userId, productId) {
+async function createOrder(buyerId, lotId) {
   return prisma.$transaction(async (tx) => {
-    const product = await tx.product.findUnique({ where: { id: productId } });
-    if (!product) {
-      throw new AppError(404, "Product not found");
-    }
-    if (product.isSold) {
-      throw new AppError(409, "Product already sold");
-    }
+    const lot = await tx.lot.findUnique({ where: { id: lotId } });
+    if (!lot) throw new AppError(404, "Lot not found");
+    if (lot.isSold) throw new AppError(409, "Lot already sold");
 
     const existingPending = await tx.order.findFirst({
-      where: {
-        userId,
-        productId,
-        status: "pending",
-      },
+      where: { buyerId, lotId, status: "pending" },
     });
-    if (existingPending) {
-      throw new AppError(409, "You already have a pending order for this product");
-    }
+    if (existingPending) throw new AppError(409, "Pending order already exists");
 
     return tx.order.create({
       data: {
-        userId,
-        productId,
+        buyerId,
+        sellerId: lot.userId,
+        lotId,
+        amount: lot.price,
         status: "pending",
       },
-      include: { product: true },
+      include: { lot: true },
     });
   });
 }
 
-async function listOrdersForUser(userId) {
-  return prisma.order.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    include: { product: true },
+async function handlePayment(orderId) {
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { lot: true },
+    });
+
+    if (!order || order.status !== "pending") {
+      throw new AppError(400, "Order cannot be paid");
+    }
+
+    // 1. Update order status
+    const updatedOrder = await tx.order.update({
+      where: { id: orderId },
+      data: { status: "paid" },
+    });
+
+    // 2. Mark lot as sold
+    await tx.lot.update({
+      where: { id: order.lotId },
+      data: { isSold: true },
+    });
+
+    // 3. Add to seller's pending balance
+    await tx.user.update({
+      where: { id: order.sellerId },
+      data: { pendingBalance: { increment: order.amount } },
+    });
+
+    // 4. Create HOLD transaction for seller
+    await tx.transaction.create({
+      data: {
+        userId: order.sellerId,
+        amount: order.amount,
+        type: "hold",
+        status: "completed",
+      },
+    });
+
+    // 5. Add system message
+    await tx.message.create({
+      data: {
+        orderId,
+        senderId: "system",
+        text: "Payment has been made. The funds are held in escrow.",
+        type: "system",
+      },
+    });
+
+    return updatedOrder;
   });
 }
 
-async function getOrderForUser(orderId, userId) {
-  const order = await prisma.order.findFirst({
-    where: { id: orderId, userId },
-    include: { product: true },
+async function confirmOrder(orderId, buyerId) {
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order || order.buyerId !== buyerId) throw new AppError(403, "Access denied");
+    if (order.status !== "paid") throw new AppError(400, "Order must be paid first");
+
+    // 1. Update order status
+    const updatedOrder = await tx.order.update({
+      where: { id: orderId },
+      data: { status: "completed", isConfirmed: true },
+    });
+
+    // 2. Move money: pending -> available
+    await tx.user.update({
+      where: { id: order.sellerId },
+      data: {
+        pendingBalance: { decrement: order.amount },
+        balance: { increment: order.amount },
+      },
+    });
+
+    // 3. Create RELEASE transaction for seller
+    await tx.transaction.create({
+      data: {
+        userId: order.sellerId,
+        amount: order.amount,
+        type: "release",
+        status: "completed",
+      },
+    });
+
+    // 4. Add system message
+    await tx.message.create({
+      data: {
+        orderId,
+        senderId: "system",
+        text: "Order has been confirmed. Funds released to seller.",
+        type: "system",
+      },
+    });
+
+    return updatedOrder;
   });
-  if (!order) {
-    throw new AppError(404, "Order not found");
+}
+
+async function listMyOrders(userId) {
+  return prisma.order.findMany({
+    where: { OR: [{ buyerId: userId }, { sellerId: userId }] },
+    orderBy: { createdAt: "desc" },
+    include: { lot: true },
+  });
+}
+
+async function getOrderById(orderId, userId) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { lot: true, buyer: true, seller: true },
+  });
+  if (!order) throw new AppError(404, "Order not found");
+  if (order.buyerId !== userId && order.sellerId !== userId) {
+    throw new AppError(403, "Access denied");
   }
   return order;
 }
 
-module.exports = { createOrder, listOrdersForUser, getOrderForUser };
+module.exports = {
+  createOrder,
+  handlePayment,
+  confirmOrder,
+  listMyOrders,
+  getOrderById,
+};

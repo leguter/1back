@@ -8,47 +8,91 @@ datasource db {
 }
 
 model User {
-  id        String   @id
-  username  String?
-  firstName String   @map("first_name")
-  createdAt DateTime @default(now()) @map("created_at")
-  orders    Order[]
+  id             String   @id
+  username       String?
+  avatar         String?
+  firstName      String   @map("first_name")
+  createdAt      DateTime @default(now()) @map("created_at")
+  balance        Int      @default(0)
+  pendingBalance Int      @default(0) @map("pending_balance")
+  
+  lots           Lot[]    @relation("SellerLots")
+  buyOrders      Order[]  @relation("BuyerOrders")
+  sellOrders     Order[]  @relation("SellerOrders")
+  transactions   Transaction[]
 
   @@map("users")
 }
 
-model Product {
+model Lot {
   id          String   @id @default(cuid())
   title       String
   description String
   price       Int
   category    String
+  userId      String   @map("user_id")
   isSold      Boolean  @default(false) @map("is_sold")
   createdAt   DateTime @default(now()) @map("created_at")
+  
+  seller      User     @relation("SellerLots", fields: [userId], references: [id])
   orders      Order[]
 
-  @@map("products")
+  @@map("lots")
 }
 
 enum OrderStatus {
   pending
   paid
-  failed
+  completed
+  cancelled
 }
 
 model Order {
-  id        String      @id @default(cuid())
-  userId    String      @map("user_id")
-  productId String      @map("product_id")
-  status    OrderStatus @default(pending)
-  createdAt DateTime    @default(now()) @map("created_at")
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product   Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
-  payments  Payment[]
+  id          String      @id @default(cuid())
+  lotId       String      @map("lot_id")
+  buyerId     String      @map("buyer_id")
+  sellerId    String      @map("seller_id")
+  status      OrderStatus @default(pending)
+  amount      Int
+  isConfirmed Boolean     @default(false) @map("is_confirmed")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  
+  lot         Lot         @relation(fields: [lotId], references: [id])
+  buyer       User        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  seller      User        @relation("SellerOrders", fields: [sellerId], references: [id])
+  messages    Message[]
+  payments    Payment[]
 
-  @@index([userId])
-  @@index([productId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([lotId])
   @@map("orders")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  orderId   String   @map("order_id")
+  senderId  String   @map("sender_id")
+  text      String
+  type      String   @default("text") // text, system
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  amount    Int
+  type      String   // deposit, hold, release, withdraw
+  status    String   @default("completed")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("transactions")
 }
 
 model Payment {

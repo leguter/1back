@@ -2,6 +2,7 @@ const { Prisma } = require("@prisma/client");
 const { getEnv } = require("../config/env");
 const { prisma } = require("../utils/prisma");
 const { AppError } = require("../utils/AppError");
+const { handlePayment } = require("./order.service");
 
 const TELEGRAM_API = "https://api.telegram.org";
 
@@ -20,13 +21,10 @@ async function telegramApi(method, body) {
   return data.result;
 }
 
-/**
- * Create Stars invoice link for a pending order owned by the user.
- */
 async function createInvoiceLinkForOrder(orderId, userId) {
   const order = await prisma.order.findFirst({
-    where: { id: orderId, userId },
-    include: { product: true },
+    where: { id: orderId, buyerId: userId },
+    include: { lot: true },
   });
   if (!order) {
     throw new AppError(404, "Order not found");
@@ -34,28 +32,25 @@ async function createInvoiceLinkForOrder(orderId, userId) {
   if (order.status !== "pending") {
     throw new AppError(409, "Order is not payable");
   }
-  if (order.product.isSold) {
-    throw new AppError(409, "Product already sold");
+  if (order.lot.isSold) {
+    throw new AppError(409, "Lot already sold");
   }
 
   const payload = order.id;
-  const title = order.product.title.slice(0, 32);
-  const description = order.product.description.slice(0, 255);
+  const title = order.lot.title.slice(0, 32);
+  const description = order.lot.description.slice(0, 255);
 
   const invoiceLink = await telegramApi("createInvoiceLink", {
     title,
     description,
     payload,
     currency: "XTR",
-    prices: [{ label: order.product.title.slice(0, 50), amount: order.product.price }],
+    prices: [{ label: order.lot.title.slice(0, 50), amount: order.lot.price }],
   });
 
   return { invoiceLink, orderId: order.id };
 }
 
-/**
- * Answer pre_checkout_query (must match pending order and price).
- */
 async function handlePreCheckoutQuery(query) {
   const payload = query.invoice_payload;
   const currency = query.currency;
@@ -72,13 +67,13 @@ async function handlePreCheckoutQuery(query) {
 
   const order = await prisma.order.findUnique({
     where: { id: payload },
-    include: { product: true },
+    include: { lot: true },
   });
 
   const payerId = query.from?.id;
   if (
     payerId == null ||
-    (order && String(payerId) !== order.userId)
+    (order && String(payerId) !== order.buyerId)
   ) {
     await telegramApi("answerPreCheckoutQuery", {
       pre_checkout_query_id: query.id,
@@ -91,8 +86,8 @@ async function handlePreCheckoutQuery(query) {
   if (
     !order ||
     order.status !== "pending" ||
-    order.product.isSold ||
-    order.product.price !== totalAmount
+    order.lot.isSold ||
+    order.lot.price !== totalAmount
   ) {
     await telegramApi("answerPreCheckoutQuery", {
       pre_checkout_query_id: query.id,
@@ -108,10 +103,6 @@ async function handlePreCheckoutQuery(query) {
   });
 }
 
-/**
- * Finalize successful_payment: idempotent via telegram_payment_charge_id unique.
- * @param {number} payerTelegramId - message.from.id; must match order.userId.
- */
 async function handleSuccessfulPayment(sp, payerTelegramId) {
   const payload = sp.invoice_payload;
   const chargeId = sp.telegram_payment_charge_id;
@@ -121,43 +112,26 @@ async function handleSuccessfulPayment(sp, payerTelegramId) {
   if (!chargeId || currency !== "XTR") {
     return { handled: false, reason: "invalid_payment_payload" };
   }
-  if (payerTelegramId == null || typeof payerTelegramId !== "number") {
+  if (payerTelegramId == null) {
     return { handled: false, reason: "missing_payer" };
   }
 
   try {
+    const order = await prisma.order.findUnique({
+      where: { id: payload },
+      include: { lot: true },
+    });
+
+    if (!order) throw new Error("order_not_found");
+    if (String(payerTelegramId) !== order.buyerId) throw new Error("payer_mismatch");
+    if (order.status === "paid" || order.status === "completed") return { handled: true };
+    if (order.lot.price !== totalAmount) throw new Error("amount_mismatch");
+
     await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id: payload },
-        include: { product: true },
-      });
-
-      if (!order) {
-        throw new Error("order_not_found");
-      }
-
-      if (String(payerTelegramId) !== order.userId) {
-        throw new Error("payer_mismatch");
-      }
-
-      if (order.status === "paid") {
-        return;
-      }
-
-      if (order.status === "failed" || order.product.isSold) {
-        throw new Error("order_invalid_state");
-      }
-
-      if (order.product.price !== totalAmount) {
-        throw new Error("amount_mismatch");
-      }
-
       const existing = await tx.payment.findUnique({
         where: { telegramPaymentChargeId: chargeId },
       });
-      if (existing) {
-        return;
-      }
+      if (existing) return;
 
       await tx.payment.create({
         data: {
@@ -168,38 +142,19 @@ async function handleSuccessfulPayment(sp, payerTelegramId) {
         },
       });
 
-      await tx.order.update({
-        where: { id: order.id },
-        data: { status: "paid" },
-      });
-
-      await tx.product.update({
-        where: { id: order.productId },
-        data: { isSold: true },
-      });
+      // Delegate business logic to order service
+      await handlePayment(order.id);
     });
 
     return { handled: true };
   } catch (e) {
     if (
       e instanceof Prisma.PrismaClientKnownRequestError &&
-      e.code === "P2002" &&
-      Array.isArray(e.meta?.target) &&
-      e.meta.target.includes("telegram_payment_charge_id")
+      e.code === "P2002"
     ) {
       return { handled: true, duplicate: true };
     }
-    if (e.message === "order_not_found") {
-      return { handled: false, reason: "order_not_found" };
-    }
-    if (
-      e.message === "order_invalid_state" ||
-      e.message === "amount_mismatch" ||
-      e.message === "payer_mismatch"
-    ) {
-      return { handled: false, reason: e.message };
-    }
-    throw e;
+    return { handled: false, reason: e.message };
   }
 }
 
