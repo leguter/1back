@@ -27,58 +27,61 @@ async function createOrder(buyerId, lotId) {
   });
 }
 
-async function handlePayment(orderId) {
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({
-      where: { id: orderId },
-      include: { lot: true },
-    });
-
-    if (!order || order.status !== "pending") {
-      throw new AppError(400, "Order cannot be paid");
-    }
-
-    // 1. Update order status
-    const updatedOrder = await tx.order.update({
-      where: { id: orderId },
-      data: { status: "paid" },
-    });
-
-    // 2. Mark lot as sold
-    await tx.lot.update({
-      where: { id: order.lotId },
-      data: { isSold: true },
-    });
-
-    // 3. Add to seller's pending balance
-    await tx.user.update({
-      where: { id: order.sellerId },
-      data: { pendingBalance: { increment: order.amount } },
-    });
-
-    // 4. Create HOLD transaction for seller
-    await tx.transaction.create({
-      data: {
-        userId: order.sellerId,
-        amount: order.amount,
-        type: "hold",
-        status: "completed",
-      },
-    });
-
-    // 5. Add system message
-    await tx.message.create({
-      data: {
-        orderId,
-        senderId: "system",
-        text: "Payment has been made. The funds are held in escrow.",
-        type: "system",
-      },
-    });
-
-    return updatedOrder;
+async function _handlePaymentTx(orderId, tx) {
+  const order = await tx.order.findUnique({
+    where: { id: orderId },
+    include: { lot: true },
   });
+
+  if (!order || order.status !== "pending") {
+    throw new AppError(400, "Order cannot be paid");
+  }
+
+  // 1. Update order status
+  const updatedOrder = await tx.order.update({
+    where: { id: orderId },
+    data: { status: "paid" },
+  });
+
+  // 2. Mark lot as sold
+  await tx.lot.update({
+    where: { id: order.lotId },
+    data: { isSold: true },
+  });
+
+  // 3. Add to seller's pending balance
+  await tx.user.update({
+    where: { id: order.sellerId },
+    data: { pendingBalance: { increment: order.amount } },
+  });
+
+  // 4. Create HOLD transaction for seller
+  await tx.transaction.create({
+    data: {
+      userId: order.sellerId,
+      amount: order.amount,
+      type: "hold",
+      status: "completed",
+    },
+  });
+
+  // 5. Add system message
+  await tx.message.create({
+    data: {
+      orderId,
+      senderId: "system",
+      text: "Payment has been made. The funds are held in escrow.",
+      type: "system",
+    },
+  });
+
+  return updatedOrder;
 }
+
+async function handlePayment(orderId) {
+  return prisma.$transaction((tx) => _handlePaymentTx(orderId, tx));
+}
+
 
 async function confirmOrder(orderId, buyerId) {
   return prisma.$transaction(async (tx) => {
@@ -151,6 +154,7 @@ async function getOrderById(orderId, userId) {
 module.exports = {
   createOrder,
   handlePayment,
+  _handlePaymentTx,
   confirmOrder,
   listMyOrders,
   getOrderById,

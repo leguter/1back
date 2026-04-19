@@ -2,7 +2,7 @@ const { Prisma } = require("@prisma/client");
 const { getEnv } = require("../config/env");
 const { prisma } = require("../utils/prisma");
 const { AppError } = require("../utils/AppError");
-const { handlePayment } = require("./order.service");
+const { _handlePaymentTx } = require("./order.service");
 
 const TELEGRAM_API = "https://api.telegram.org";
 
@@ -142,8 +142,8 @@ async function handleSuccessfulPayment(sp, payerTelegramId) {
         },
       });
 
-      // Delegate business logic to order service
-      await handlePayment(order.id);
+      // Run all order business logic in the same transaction (atomic)
+      await _handlePaymentTx(order.id, tx);
     });
 
     return { handled: true };
