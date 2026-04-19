@@ -17,9 +17,25 @@ loadEnv();
 
 const app = express();
 
+const ALLOWED_ORIGINS = [
+  'https://account-martk.vercel.app',
+  'https://account-martk-cxkpl5kec-leguters-projects.vercel.app',
+];
+
 app.use(cors({
-  origin:  'https://account-martk-cxkp15kec-leguters-projects.vercel.app',
-  credentials: true
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, Telegram WebView, curl)
+    if (!origin) return callback(null, true);
+    // Allow any Vercel preview URL for this project
+    if (
+      ALLOWED_ORIGINS.includes(origin) ||
+      /^https:\/\/account-martk-[a-z0-9]+-leguters-projects\.vercel\.app$/.test(origin)
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
+  credentials: true,
 }));
 
 app.use(express.json());
