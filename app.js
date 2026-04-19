@@ -18,7 +18,7 @@ loadEnv();
 const app = express();
 
 app.use(cors({
-  origin: process.env.BASE_URL || 'https://account-martk-cxkp15kec-leguters-projects.vercel.app',
+  origin:  'https://account-martk-cxkp15kec-leguters-projects.vercel.app',
   credentials: true
 }));
 
