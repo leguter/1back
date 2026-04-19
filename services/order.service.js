@@ -9,11 +9,16 @@ async function createOrder(buyerId, lotId) {
     if (!lot) throw new AppError(404, "Lot not found");
     if (lot.isSold) throw new AppError(409, "Lot already sold");
 
+    // 1. Шукаємо існуючий активний діалог/замовлення
     const existingPending = await tx.order.findFirst({
       where: { buyerId, lotId, status: "pending" },
+      include: { lot: true },
     });
-    if (existingPending) throw new AppError(409, "Pending order already exists");
 
+    // 2. Якщо вже є — просто повертаємо його (чат відкриється знову)
+    if (existingPending) return existingPending;
+
+    // 3. Якщо немає — створюємо нове
     return tx.order.create({
       data: {
         buyerId,
