@@ -1,13 +1,12 @@
 const { prisma } = require("../utils/prisma");
 const { AppError } = require("../utils/AppError");
 
-// services/user.service.js
 async function getUserProfile(userId) {
-  const id = Number(userId); // Додаткова страховка
+  const id = String(userId);
   if (!id) throw new AppError(400, "Valid User ID is required");
 
   const user = await prisma.user.findUnique({
-    where: { id: id },
+    where: { id },
     include: {
       lots: { where: { isSold: false } },
       buyOrders: { include: { lot: true } },
@@ -34,8 +33,16 @@ async function getUserBalance(userId) {
 
 async function listLotsByUser(userId) {
   return prisma.lot.findMany({
-    where: { userId },
+    where: { userId: String(userId) },
     orderBy: { createdAt: "desc" },
+  });
+}
+
+async function listBuyerOrders(userId) {
+  return prisma.order.findMany({
+    where: { buyerId: String(userId) },
+    orderBy: { createdAt: "desc" },
+    include: { lot: true },
   });
 }
 
@@ -68,5 +75,6 @@ module.exports = {
   getUserProfile,
   getUserBalance,
   listLotsByUser,
+  listBuyerOrders,
   withdrawBalance,
 };

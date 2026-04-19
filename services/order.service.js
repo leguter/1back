@@ -144,6 +144,14 @@ async function listMyOrders(userId) {
   });
 }
 
+async function listBuyerOrders(userId) {
+  return prisma.order.findMany({
+    where: { buyerId: String(userId) },
+    orderBy: { createdAt: "desc" },
+    include: { lot: true },
+  });
+}
+
 async function getOrderById(orderId, userId) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -162,5 +170,6 @@ module.exports = {
   _handlePaymentTx,
   confirmOrder,
   listMyOrders,
+  listBuyerOrders,
   getOrderById,
 };

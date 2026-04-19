@@ -1,5 +1,5 @@
 const { z } = require("zod");
-const { createOrder, listMyOrders, getOrderById, confirmOrderReceipt } = require("../services/order.service");
+const { createOrder, listMyOrders, listBuyerOrders, getOrderById, confirmOrder } = require("../services/order.service");
 
 // Схема залишається такою ж, лот — це основа замовлення/чату
 const createOrderBodySchema = z.object({
@@ -48,18 +48,13 @@ async function confirm(req, res, next) {
   try {
     const userId = req.user.sub || req.user.id;
     const orderId = req.params.id;
-
-    // confirmOrderReceipt має перевірити:
-    // 1. Статус замовлення зараз 'paid'
-    // 2. Користувач — це саме покупець
-    // 3. Після успіху — переказати гроші з pendingBalance продавцю
-    const order = await confirmOrderReceipt(orderId, userId);
-    
+    const order = await confirmOrder(orderId, userId);
     res.json({ success: true, order });
   } catch (e) {
     next(e);
   }
 }
+
 async function getOne(req, res, next) {
   try {
     const order = await getOrderById(req.params.id, req.user.sub || req.user.id);
@@ -69,18 +64,20 @@ async function getOne(req, res, next) {
   }
 }
 
-// async function confirm(req, res, next) {
-//   try {
-//     const order = await confirmOrder(req.params.id, req.user.sub || req.user.id);
-//     res.json({ success: true, order });
-//   } catch (e) {
-//     next(e);
-//   }
-// }
+async function listBuyer(req, res, next) {
+  try {
+    const userId = req.user.sub || req.user.id;
+    const orders = await listBuyerOrders(userId);
+    res.json({ success: true, orders });
+  } catch (e) {
+    next(e);
+  }
+}
 
 module.exports = {
   create,
   listMine,
+  listBuyer,
   getOne,
   confirm,
   createOrderBodySchema,

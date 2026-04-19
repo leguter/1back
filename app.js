@@ -63,6 +63,7 @@ app.post(
   orderController.create
 );
 app.get("/api/orders", requireAuth, orderController.listMine);
+app.get("/api/orders/buyer", requireAuth, orderController.listBuyer);
 app.get("/api/orders/:id", requireAuth, orderController.getOne);
 app.patch("/api/orders/:id/confirm", requireAuth, orderController.confirm);
 

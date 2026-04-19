@@ -1,12 +1,12 @@
 const { getUserProfile, listLotsByUser } = require("../services/user.service");
+const { AppError } = require("../utils/AppError");
 
 // user.controller.js
 async function getProfile(req, res, next) {
   try {
-    const rawId = req.params.id || req.user.sub || req.user.id;
-    const userId = Number(rawId); // Перетворюємо на число ОБОВ'ЯЗКОВО
+    const userId = String(req.params.id || req.user.sub || req.user.id);
 
-    if (isNaN(userId)) {
+    if (!userId) {
       return next(new AppError(400, "Invalid User ID"));
     }
 
@@ -19,7 +19,7 @@ async function getProfile(req, res, next) {
 
 async function getMyLots(req, res, next) {
   try {
-    const userId = req.params.id || req.user.sub || req.user.id;
+    const userId = String(req.params.id || req.user.sub || req.user.id);
     const lots = await listLotsByUser(userId);
     res.json({ success: true, lots });
   } catch (e) {
