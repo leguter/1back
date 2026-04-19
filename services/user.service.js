@@ -1,15 +1,20 @@
 const { prisma } = require("../utils/prisma");
 const { AppError } = require("../utils/AppError");
 
+// services/user.service.js
 async function getUserProfile(userId) {
+  const id = Number(userId); // Додаткова страховка
+  if (!id) throw new AppError(400, "Valid User ID is required");
+
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: id },
     include: {
       lots: { where: { isSold: false } },
       buyOrders: { include: { lot: true } },
       sellOrders: { include: { lot: true } },
     },
   });
+
   if (!user) {
     throw new AppError(404, "User not found");
   }
