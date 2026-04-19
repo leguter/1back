@@ -1,13 +1,26 @@
 const { z } = require("zod");
-const { createInvoiceLinkForOrder, processTelegramUpdate } = require("../services/payment.service");
+const { createInvoiceLinkForOrder, processTelegramUpdate, manualConfirmPayment } = require("../services/payment.service");
 
 const createPaymentBodySchema = z.object({
   orderId: z.string().min(1),
 });
 
+const manualConfirmBodySchema = z.object({
+  orderId: z.string().min(1),
+});
+
 async function create(req, res, next) {
   try {
-    const result = await createInvoiceLinkForOrder(req.validated.body.orderId, req.user.id);
+    const result = await createInvoiceLinkForOrder(req.validated.body.orderId, req.user.sub || req.user.id);
+    res.json({ success: true, ...result });
+  } catch (e) {
+    next(e);
+  }
+}
+
+async function manualConfirm(req, res, next) {
+  try {
+    const result = await manualConfirmPayment(req.validated.body.orderId, req.user.sub || req.user.id);
     res.json({ success: true, ...result });
   } catch (e) {
     next(e);
@@ -38,6 +51,8 @@ async function webhook(req, res) {
 
 module.exports = {
   create,
+  manualConfirm,
   webhook,
   createPaymentBodySchema,
+  manualConfirmBodySchema,
 };

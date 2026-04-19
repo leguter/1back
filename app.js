@@ -74,6 +74,12 @@ app.post(
   validateBody(paymentController.createPaymentBodySchema),
   paymentController.create
 );
+app.post(
+  "/api/payments/manual-confirm",
+  requireAuth,
+  validateBody(paymentController.manualConfirmBodySchema),
+  paymentController.manualConfirm
+);
 app.post("/api/payments/webhook", paymentController.webhook);
 
 // Chat

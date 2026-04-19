@@ -174,7 +174,39 @@ async function processTelegramUpdate(update) {
   return { type: "ignored" };
 }
 
+
+async function manualConfirmPayment(orderId, userId) {
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+
+  if (!order) throw new AppError(404, "Order not found");
+  if (String(order.buyerId) !== String(userId)) throw new AppError(403, "Access denied");
+
+  // Idempotent: already processed
+  if (order.status === "paid" || order.status === "completed") {
+    return { handled: true, alreadyPaid: true };
+  }
+  if (order.status !== "pending") {
+    throw new AppError(409, "Order cannot be confirmed");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Create payment record (no chargeId since we don't have it from frontend)
+    await tx.payment.create({
+      data: {
+        orderId,
+        provider: "telegram",
+        status: "completed",
+      },
+    });
+    // Run all order business logic
+    await _handlePaymentTx(orderId, tx);
+  });
+
+  return { handled: true };
+}
+
 module.exports = {
   createInvoiceLinkForOrder,
   processTelegramUpdate,
+  manualConfirmPayment,
 };
