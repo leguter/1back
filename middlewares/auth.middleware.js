@@ -14,12 +14,13 @@ function requireAuth(req, res, next) {
     }
     const { jwtSecret } = getEnv();
     const payload = jwt.verify(token, jwtSecret);
-    const sub = payload.sub;
-    if (typeof sub !== "string" || !sub) {
-      throw new AppError(401, "Invalid token payload");
-    }
-    req.user = { id: sub };
-    next();
+   // у requireAuth
+const sub = payload.sub;
+if (!sub) {
+  throw new AppError(401, "Invalid token payload");
+}
+req.user = { sub: sub, id: sub }; // Додай і те, і інше для надійності
+next();
   } catch (e) {
     if (e instanceof AppError) {
       return next(e);

@@ -1,6 +1,5 @@
 const express = require("express");
 const cors = require("cors");
-const { loadEnv } = require("./config/env");
 const { validateBody } = require("./middlewares/validate.middleware");
 const { requireAuth } = require("./middlewares/auth.middleware");
 const { notFoundHandler, errorHandler } = require("./middlewares/error.middleware");
@@ -13,7 +12,6 @@ const chatController = require("./controllers/chat.controller");
 const userController = require("./controllers/user.controller");
 const balanceController = require("./controllers/balance.controller");
 
-loadEnv();
 
 const app = express();
 
