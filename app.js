@@ -84,6 +84,8 @@ app.post("/api/payments/webhook", paymentController.webhook);
 
 // Chat
 app.get("/api/chats", requireAuth, chatController.getChats);
+app.post("/api/chat/:orderId/typing", requireAuth, chatController.setTyping);
+app.get("/api/chat/:orderId/typing", requireAuth, chatController.getTyping);
 app.get("/api/chat/:orderId", requireAuth, chatController.getOrderMessages);
 app.post(
   "/api/chat/:orderId",
