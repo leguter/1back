@@ -2,21 +2,29 @@ const { prisma } = require("../utils/prisma");
 const { AppError } = require("../utils/AppError");
 
 async function getUserProfile(userId) {
-  const id = String(userId);
-  if (!id) throw new AppError(400, "Valid User ID is required");
+  const raw = String(userId);
+  if (!raw) throw new AppError(400, "Valid User ID is required");
 
-  const user = await prisma.user.findUnique({
-    where: { id },
-    include: {
-      lots: { where: { isSold: false } },
-      buyOrders: { include: { lot: true } },
-      sellOrders: { include: { lot: true } },
+  const include = {
+    lots: {
+      where: { isSold: false },
+      orderBy: { createdAt: "desc" },
     },
-  });
+    _count: {
+      select: {
+        sellOrders: { where: { status: "completed" } },
+      },
+    },
+  };
+
+  // Try exact id first, then fall back to username
+  let user = await prisma.user.findUnique({ where: { id: raw }, include });
 
   if (!user) {
-    throw new AppError(404, "User not found");
+    user = await prisma.user.findFirst({ where: { username: raw }, include });
   }
+
+  if (!user) throw new AppError(404, "User not found");
   return user;
 }
 
