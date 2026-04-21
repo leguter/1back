@@ -12,6 +12,7 @@ model User {
   username       String?
   avatar         String?
   firstName      String   @map("first_name")
+  bio            String?
   createdAt      DateTime @default(now()) @map("created_at")
   balance        Int      @default(0)
   pendingBalance Int      @default(0) @map("pending_balance")
@@ -25,14 +26,15 @@ model User {
 }
 
 model Lot {
-  id          String   @id @default(cuid())
-  title       String
-  description String
-  price       Int
-  category    String
-  userId      String   @map("user_id")
-  isSold      Boolean  @default(false) @map("is_sold")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id               String   @id @default(cuid())
+  title            String
+  description      String
+  price            Int
+  category         String
+  subscribersCount Int?     @map("subscribers_count")
+  userId           String   @map("user_id")
+  isSold           Boolean  @default(false) @map("is_sold")
+  createdAt        DateTime @default(now()) @map("created_at")
   
   seller      User     @relation("SellerLots", fields: [userId], references: [id])
   orders      Order[]

@@ -6,6 +6,7 @@ const createLotBodySchema = z.object({
   description: z.string().min(1).max(5000),
   price: z.number().int().positive(),
   category: z.string().min(1).max(100),
+  subscribersCount: z.number().int().positive().optional().nullable(),
 });
 
 // Patch allows partial updates but we require all four editable fields
@@ -14,6 +15,7 @@ const updateLotBodySchema = z.object({
   description: z.string().min(1).max(5000),
   price: z.number().int().positive(),
   category: z.string().min(1).max(100),
+  subscribersCount: z.number().int().positive().optional().nullable(),
 });
 
 async function getAll(req, res, next) {

@@ -114,6 +114,7 @@ app.post(
 // User Profile
 app.get("/api/users/:id", userController.getProfile);
 app.get("/api/users/:id/lots", userController.getMyLots);
+app.patch("/api/users/:id", requireAuth, userController.updateProfile);
 app.get("/api/profile", requireAuth, userController.getProfile);
 
 app.get("/health", (req, res) => {

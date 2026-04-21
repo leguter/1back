@@ -79,10 +79,26 @@ async function withdrawBalance(userId, amount) {
   });
 }
 
+async function updateUserProfile(userId, requestorId, data) {
+  if (String(userId) !== String(requestorId)) {
+    throw new AppError(403, "You can only edit your own profile");
+  }
+  const updated = await prisma.user.update({
+    where: { id: String(userId) },
+    data: {
+      ...(data.bio   !== undefined && { bio: data.bio }),
+      ...(data.avatar !== undefined && { avatar: data.avatar }),
+      ...(data.username !== undefined && { username: data.username }),
+    },
+  });
+  return updated;
+}
+
 module.exports = {
   getUserProfile,
   getUserBalance,
   listLotsByUser,
   listBuyerOrders,
   withdrawBalance,
+  updateUserProfile,
 };

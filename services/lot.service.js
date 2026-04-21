@@ -2,6 +2,14 @@ const { prisma } = require('../utils/prisma');
 const { AppError } = require('../utils/AppError');
 const { assertNoProfanity } = require('../utils/profanity');
 
+const SUBSCRIBERS_REQUIRED = ['telegram', 'youtube'];
+
+function assertSubscribersCount(category, subscribersCount) {
+  if (SUBSCRIBERS_REQUIRED.includes(category) && !subscribersCount) {
+    throw new AppError(400, `Subscribers count is required for ${category} listings`, 'validation_error');
+  }
+}
+
 async function listLots() {
   return prisma.lot.findMany({
     where: { isSold: false },
@@ -21,6 +29,7 @@ async function getLotById(id) {
 
 async function createLot(userId, data) {
   assertNoProfanity(data.title, data.description);
+  assertSubscribersCount(data.category, data.subscribersCount);
   return prisma.lot.create({
     data: {
       userId,
@@ -28,6 +37,7 @@ async function createLot(userId, data) {
       description: data.description,
       price: data.price,
       category: data.category,
+      subscribersCount: data.subscribersCount ? Number(data.subscribersCount) : null,
     },
     include: { seller: true },
   });
@@ -40,6 +50,7 @@ async function updateLot(lotId, userId, data) {
   if (lot.isSold) throw new AppError(409, 'Cannot edit a sold lot');
 
   assertNoProfanity(data.title, data.description);
+  assertSubscribersCount(data.category, data.subscribersCount);
 
   return prisma.lot.update({
     where: { id: lotId },
@@ -48,6 +59,7 @@ async function updateLot(lotId, userId, data) {
       description: data.description,
       price: data.price,
       category: data.category,
+      subscribersCount: data.subscribersCount ? Number(data.subscribersCount) : null,
     },
     include: { seller: true },
   });
