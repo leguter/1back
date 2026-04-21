@@ -54,6 +54,13 @@ app.post(
   validateBody(lotController.createLotBodySchema),
   lotController.create
 );
+app.patch(
+  "/api/lots/:id",
+  requireAuth,
+  validateBody(lotController.updateLotBodySchema),
+  lotController.update
+);
+app.delete("/api/lots/:id", requireAuth, lotController.remove);
 
 // Orders
 app.post(

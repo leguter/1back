@@ -1,7 +1,15 @@
-const { z } = require("zod");
-const { listLots, getLotById, createLot } = require("../services/lot.service");
+const { z } = require('zod');
+const { listLots, getLotById, createLot, updateLot, deleteLot } = require('../services/lot.service');
 
 const createLotBodySchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().min(1).max(5000),
+  price: z.number().int().positive(),
+  category: z.string().min(1).max(100),
+});
+
+// Patch allows partial updates but we require all four editable fields
+const updateLotBodySchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(5000),
   price: z.number().int().positive(),
@@ -28,8 +36,28 @@ async function getOne(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    const lot = await createLot(req.user.sub, req.validated.body);
+    const lot = await createLot(req.user.sub || req.user.id, req.validated.body);
     res.status(201).json({ success: true, lot });
+  } catch (e) {
+    next(e);
+  }
+}
+
+async function update(req, res, next) {
+  try {
+    const userId = req.user.sub || req.user.id;
+    const lot = await updateLot(req.params.id, userId, req.validated.body);
+    res.json({ success: true, lot });
+  } catch (e) {
+    next(e);
+  }
+}
+
+async function remove(req, res, next) {
+  try {
+    const userId = req.user.sub || req.user.id;
+    await deleteLot(req.params.id, userId);
+    res.json({ success: true, deleted: true });
   } catch (e) {
     next(e);
   }
@@ -39,5 +67,8 @@ module.exports = {
   getAll,
   getOne,
   create,
+  update,
+  remove,
   createLotBodySchema,
+  updateLotBodySchema,
 };
