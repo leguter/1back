@@ -1,5 +1,5 @@
 const { z } = require("zod");
-const { listMessages, sendMessage } = require("../services/chat.service");
+const { listMessages, sendMessage, getChatList } = require("../services/chat.service");
 
 const sendMessageBodySchema = z.object({
   text: z.string().min(1).max(5000),
@@ -27,8 +27,19 @@ async function sendOrderMessage(req, res, next) {
   }
 }
 
+async function getChats(req, res, next) {
+  try {
+    const userId = req.user.sub || req.user.id;
+    const chats = await getChatList(userId);
+    res.json({ success: true, chats });
+  } catch (e) {
+    next(e);
+  }
+}
+
 module.exports = {
   getOrderMessages,
   sendOrderMessage,
+  getChats,
   sendMessageBodySchema,
 };

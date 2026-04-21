@@ -83,6 +83,7 @@ app.post(
 app.post("/api/payments/webhook", paymentController.webhook);
 
 // Chat
+app.get("/api/chats", requireAuth, chatController.getChats);
 app.get("/api/chat/:orderId", requireAuth, chatController.getOrderMessages);
 app.post(
   "/api/chat/:orderId",

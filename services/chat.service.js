@@ -43,8 +43,33 @@ async function sendSystemMessage(orderId, text) {
   return sendMessage(orderId, "system", text, "system");
 }
 
+async function getChatList(userId) {
+  const orders = await prisma.order.findMany({
+    where: {
+      OR: [{ buyerId: userId }, { sellerId: userId }],
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      lot: true,
+      buyer: true,
+      seller: true,
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+  });
+
+  return orders.map((order) => ({
+    ...order,
+    lastMessage: order.messages[0] ?? null,
+    messages: undefined, // strip array, keep only lastMessage
+  }));
+}
+
 module.exports = {
   listMessages,
   sendMessage,
   sendSystemMessage,
+  getChatList,
 };
