@@ -18,12 +18,14 @@ function errorHandler(err, req, res, next) {
         : err.message || "Error";
 
   if (status === 500) {
-    console.error(err);
+    console.error('[500 Error]', err.message, err.stack);
   }
 
   res.status(status).json({
     success: false,
     error: message,
+    // In non-production, surface the real error detail for debugging
+    ...(process.env.NODE_ENV !== 'production' && status === 500 ? { detail: err.message } : {}),
     ...(err instanceof AppError && err.code ? { code: err.code } : {}),
   });
 }

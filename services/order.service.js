@@ -4,26 +4,32 @@ const chatService = require("./chat.service");
 const transactionService = require("./transaction.service");
 
 async function createOrder(buyerId, lotId) {
+  const buyerIdStr = String(buyerId);
+  const lotIdStr = String(lotId);
+
   return prisma.$transaction(async (tx) => {
-    const lot = await tx.lot.findUnique({ where: { id: lotId } });
+    const lot = await tx.lot.findUnique({ where: { id: lotIdStr } });
     if (!lot) throw new AppError(404, "Lot not found");
     if (lot.isSold) throw new AppError(409, "Lot already sold");
 
-    // 1. Шукаємо існуючий активний діалог/замовлення
+    // Prevent self-purchase
+    if (String(lot.userId) === buyerIdStr) {
+      throw new AppError(400, "You cannot buy your own listing");
+    }
+
+    // 1. Return existing pending order (idempotent)
     const existingPending = await tx.order.findFirst({
-      where: { buyerId, lotId, status: "pending" },
+      where: { buyerId: buyerIdStr, lotId: lotIdStr, status: "pending" },
       include: { lot: true },
     });
-
-    // 2. Якщо вже є — просто повертаємо його (чат відкриється знову)
     if (existingPending) return existingPending;
 
-    // 3. Якщо немає — створюємо нове
+    // 2. Create new order
     return tx.order.create({
       data: {
-        buyerId,
-        sellerId: lot.userId,
-        lotId,
+        buyerId: buyerIdStr,
+        sellerId: String(lot.userId),
+        lotId: lotIdStr,
         amount: lot.price,
         status: "pending",
       },
