@@ -36,9 +36,10 @@ async function getOtherTyping(orderId, myUserId) {
 // ─── Messages ────────────────────────────────────────────────────────────────
 
 async function listMessages(orderId, userId) {
+  const userIdStr = String(userId);
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new AppError(404, 'Order not found');
-  if (order.buyerId !== userId && order.sellerId !== userId) {
+  if (String(order.buyerId) !== userIdStr && String(order.sellerId) !== userIdStr) {
     throw new AppError(403, 'Access denied');
   }
   return prisma.message.findMany({

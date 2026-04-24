@@ -25,16 +25,27 @@ async function createOrder(buyerId, lotId) {
     if (existingPending) return existingPending;
 
     // 2. Create new order
-    return tx.order.create({
-      data: {
-        buyerId: buyerIdStr,
+    try {
+      return await tx.order.create({
+        data: {
+          buyerId: buyerIdStr,
+          sellerId: String(lot.userId),
+          lotId: lotIdStr,
+          amount: lot.price,
+          status: "pending",
+        },
+        include: { lot: true },
+      });
+    } catch (err) {
+      console.error('[createOrder] Failed to create order:', {
+        buyerIdStr,
         sellerId: String(lot.userId),
-        lotId: lotIdStr,
-        amount: lot.price,
-        status: "pending",
-      },
-      include: { lot: true },
-    });
+        lotIdStr,
+        errCode: err.code,
+        errMessage: err.message,
+      });
+      throw new AppError(500, err.message || "Failed to create order");
+    }
   });
 }
 
@@ -159,12 +170,13 @@ async function listBuyerOrders(userId) {
 }
 
 async function getOrderById(orderId, userId) {
+  const userIdStr = String(userId);
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { lot: true, buyer: true, seller: true },
   });
   if (!order) throw new AppError(404, "Order not found");
-  if (order.buyerId !== userId && order.sellerId !== userId) {
+  if (String(order.buyerId) !== userIdStr && String(order.sellerId) !== userIdStr) {
     throw new AppError(403, "Access denied");
   }
   return order;
