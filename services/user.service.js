@@ -54,28 +54,87 @@ async function listBuyerOrders(userId) {
   });
 }
 
-async function withdrawBalance(userId, amount) {
+const FAST_WITHDRAW_MIN_DAYS = 2;
+const FREE_WITHDRAW_DAYS     = 20;
+const FAST_WITHDRAW_FEE      = 0.10; // 10 %
+
+async function getWithdrawEligibility(userId) {
+  const id = String(userId);
+
+  // Find the most recently completed sell order for this seller
+  const lastCompleted = await prisma.order.findFirst({
+    where: { sellerId: id, status: "completed" },
+    orderBy: { completedAt: "desc" },
+  });
+
+  const now = new Date();
+
+  if (!lastCompleted || !lastCompleted.completedAt) {
+    // No completed orders yet — use createdAt as fallback (always "too new")
+    return { eligible: false, daysElapsed: 0, fee: 0, mode: "none" };
+  }
+
+  const completed = new Date(lastCompleted.completedAt);
+  const msElapsed = now - completed;
+  const daysElapsed = msElapsed / (1000 * 60 * 60 * 24);
+
+  if (daysElapsed < FAST_WITHDRAW_MIN_DAYS) {
+    return { eligible: false, daysElapsed, fee: 0, mode: "locked" };
+  }
+  if (daysElapsed < FREE_WITHDRAW_DAYS) {
+    return { eligible: true, daysElapsed, fee: FAST_WITHDRAW_FEE, mode: "fast" };
+  }
+  return { eligible: true, daysElapsed, fee: 0, mode: "free" };
+}
+
+async function withdrawBalance(userId, amount, mode) {
+  const id = String(userId);
+  const eligibility = await getWithdrawEligibility(id);
+
+  if (!eligibility.eligible) {
+    const daysLeft = Math.ceil(FAST_WITHDRAW_MIN_DAYS - eligibility.daysElapsed);
+    throw new AppError(
+      400,
+      `Funds are locked. Fast withdraw available in ${daysLeft} day(s).`
+    );
+  }
+
+  const fee       = Math.floor(amount * eligibility.fee);
+  const netAmount = amount - fee;   // what user actually receives
+
   return prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: userId } });
+    const user = await tx.user.findUnique({ where: { id } });
     if (!user || user.balance < amount) {
       throw new AppError(400, "Insufficient balance");
     }
 
     const updatedUser = await tx.user.update({
-      where: { id: userId },
+      where: { id },
       data: { balance: { decrement: amount } },
     });
 
     await tx.transaction.create({
       data: {
-        userId,
-        amount,
+        userId: id,
+        amount: netAmount,
         type: "withdraw",
         status: "completed",
       },
     });
 
-    return updatedUser;
+    if (fee > 0) {
+      // Record the platform fee separately for accounting
+      await tx.transaction.create({
+        data: {
+          userId: id,
+          amount: fee,
+          type: "withdraw_fee",
+          status: "completed",
+        },
+      });
+    }
+
+    return { user: updatedUser, fee, netAmount, mode: eligibility.mode };
   });
 }
 
@@ -101,4 +160,5 @@ module.exports = {
   listBuyerOrders,
   withdrawBalance,
   updateUserProfile,
+  getWithdrawEligibility,
 };

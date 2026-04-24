@@ -58,6 +58,7 @@ model Order {
   amount      Int
   isConfirmed Boolean     @default(false) @map("is_confirmed")
   createdAt   DateTime    @default(now()) @map("created_at")
+  completedAt DateTime?   @map("completed_at")
   
   lot         Lot         @relation(fields: [lotId], references: [id])
   buyer       User        @relation("BuyerOrders", fields: [buyerId], references: [id])

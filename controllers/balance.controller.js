@@ -1,9 +1,10 @@
 const { z } = require("zod");
-const { getUserBalance, withdrawBalance } = require("../services/user.service");
+const { getUserBalance, withdrawBalance, getWithdrawEligibility } = require("../services/user.service");
 const { listTransactions } = require("../services/transaction.service");
 
 const withdrawBodySchema = z.object({
   amount: z.number().int().positive(),
+  mode:   z.enum(["fast", "free"]).optional(),
 });
 
 async function getBalance(req, res, next) {
@@ -24,11 +25,20 @@ async function getTransactions(req, res, next) {
   }
 }
 
+async function getEligibility(req, res, next) {
+  try {
+    const eligibility = await getWithdrawEligibility(req.user.sub || req.user.id);
+    res.json({ success: true, ...eligibility });
+  } catch (e) {
+    next(e);
+  }
+}
+
 async function withdraw(req, res, next) {
   try {
-    const { amount } = req.validated.body;
-    const user = await withdrawBalance(req.user.sub || req.user.id, amount);
-    res.json({ success: true, user });
+    const { amount, mode } = req.validated.body;
+    const result = await withdrawBalance(req.user.sub || req.user.id, amount, mode);
+    res.json({ success: true, ...result });
   } catch (e) {
     next(e);
   }
@@ -37,6 +47,7 @@ async function withdraw(req, res, next) {
 module.exports = {
   getBalance,
   getTransactions,
+  getEligibility,
   withdraw,
   withdrawBodySchema,
 };

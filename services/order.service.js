@@ -97,10 +97,10 @@ async function confirmOrder(orderId, buyerId) {
     if (!order || order.buyerId !== buyerId) throw new AppError(403, "Access denied");
     if (order.status !== "paid") throw new AppError(400, "Order must be paid first");
 
-    // 1. Update order status
+    // 1. Update order status + stamp completedAt
     const updatedOrder = await tx.order.update({
       where: { id: orderId },
-      data: { status: "completed", isConfirmed: true },
+      data: { status: "completed", isConfirmed: true, completedAt: new Date() },
     });
 
     // 2. Move money: pending -> available

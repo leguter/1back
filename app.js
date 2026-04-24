@@ -104,6 +104,7 @@ app.post(
 // Balance & Transactions
 app.get("/api/balance", requireAuth, balanceController.getBalance);
 app.get("/api/transactions", requireAuth, balanceController.getTransactions);
+app.get("/api/withdraw-eligibility", requireAuth, balanceController.getEligibility);
 app.post(
   "/api/withdraw",
   requireAuth,
