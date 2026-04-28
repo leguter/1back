@@ -22,9 +22,7 @@ async function create(req, res, next) {
 async function manualConfirm(req, res, next) {
   try {
     const { getEnv } = require("../config/env");
-    if (getEnv().nodeEnv === "production") {
-      throw new AppError(403, "Not allowed in production");
-    }
+    // Removed production check to allow fallback confirmation if webhooks are missed
     const result = await manualConfirmPayment(req.validated.body.orderId, req.user.sub || req.user.id);
     res.json({ success: true, ...result });
   } catch (e) {
