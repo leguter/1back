@@ -87,7 +87,7 @@ async function handlePreCheckoutQuery(query) {
     order.status !== "pending" ||
     order.lot.isSold ||
     order.amount !== totalAmount
-  ) {
+   {
     await telegramApi("answerPreCheckoutQuery", {
       pre_checkout_query_id: query.id,
       ok: false,
