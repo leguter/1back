@@ -3,48 +3,50 @@ const { AppError } = require("../utils/AppError");
 const chatService = require("./chat.service");
 const transactionService = require("./transaction.service");
 
-async function createOrder(buyerId, lotId) {
+const COMMISSION_RATE = 0.10; // 10% platform commission
+
+async function createOrder(buyerId, lotId, quantity = 1) {
   const buyerIdStr = String(buyerId);
   const lotIdStr = String(lotId);
+  const qty = Math.max(1, Math.floor(Number(quantity)));
 
   return prisma.$transaction(async (tx) => {
     const lot = await tx.lot.findUnique({ where: { id: lotIdStr } });
-    if (!lot) throw new AppError(404, "Lot not found");
-    if (lot.isSold) throw new AppError(409, "Lot already sold");
+    if (!lot) throw new AppError(404, 'Lot not found');
+    if (lot.isSold) throw new AppError(409, 'Lot already sold');
+    if (lot.stockCount < qty) throw new AppError(400, `Only ${lot.stockCount} account(s) available`);
 
     // Prevent self-purchase
     if (String(lot.userId) === buyerIdStr) {
-      throw new AppError(400, "You cannot buy your own listing");
+      throw new AppError(400, 'You cannot buy your own listing');
     }
 
-    // 1. Return existing pending order (idempotent)
+    // Return existing pending order (idempotent, same quantity)
     const existingPending = await tx.order.findFirst({
-      where: { buyerId: buyerIdStr, lotId: lotIdStr, status: "pending" },
+      where: { buyerId: buyerIdStr, lotId: lotIdStr, status: 'pending', quantity: qty },
       include: { lot: true },
     });
     if (existingPending) return existingPending;
 
-    // 2. Create new order
+    const totalAmount = lot.price * qty;
+    const sellerAmount = Math.floor(totalAmount * (1 - COMMISSION_RATE));
+
     try {
       return await tx.order.create({
         data: {
           buyerId: buyerIdStr,
           sellerId: String(lot.userId),
           lotId: lotIdStr,
-          amount: lot.price,
-          status: "pending",
+          amount: totalAmount,
+          sellerAmount,
+          quantity: qty,
+          status: 'pending',
         },
         include: { lot: true },
       });
     } catch (err) {
-      console.error('[createOrder] Failed to create order:', {
-        buyerIdStr,
-        sellerId: String(lot.userId),
-        lotIdStr,
-        errCode: err.code,
-        errMessage: err.message,
-      });
-      throw new AppError(500, err.message || "Failed to create order");
+      console.error('[createOrder] Failed to create order:', err.message);
+      throw new AppError(500, err.message || 'Failed to create order');
     }
   });
 }
@@ -71,29 +73,38 @@ async function _handlePaymentTx(orderId, tx) {
     data: { isSold: true },
   });
 
-  // 3. Add to seller's pending balance
+  // 3. Add to seller's pending balance (only the sellerAmount, not full amount)
   await tx.user.update({
     where: { id: order.sellerId },
-    data: { pendingBalance: { increment: order.amount } },
+    data: { pendingBalance: { increment: order.sellerAmount } },
   });
 
   // 4. Create HOLD transaction for seller
   await tx.transaction.create({
     data: {
       userId: order.sellerId,
-      amount: order.amount,
-      type: "hold",
-      status: "completed",
+      amount: order.sellerAmount,
+      type: 'hold',
+      status: 'completed',
     },
   });
 
-  // 5. Add system message
+  // 5. Decrement lot stockCount; mark sold if depleted
+  const updatedLot = await tx.lot.update({
+    where: { id: order.lotId },
+    data: { stockCount: { decrement: order.quantity } },
+  });
+  if (updatedLot.stockCount <= 0) {
+    await tx.lot.update({ where: { id: order.lotId }, data: { isSold: true } });
+  }
+
+  // 6. Add system message
   await tx.message.create({
     data: {
       orderId,
-      senderId: "system",
-      text: "Payment has been made. The funds are held in escrow.",
-      type: "system",
+      senderId: 'system',
+      text: `✅ Payment received (${order.quantity} account${order.quantity > 1 ? 's' : ''}). Funds held in escrow.`,
+      type: 'system',
     },
   });
 
@@ -120,12 +131,13 @@ async function confirmOrder(orderId, buyerId) {
       data: { status: "completed", isConfirmed: true, completedAt: new Date() },
     });
 
-    // 2. Move money: pending -> available
+    // 2. Move money: pending → available (sellerAmount = after commission)
+    const releaseAmount = order.sellerAmount || order.amount; // fallback for old orders
     await tx.user.update({
       where: { id: order.sellerId },
       data: {
-        pendingBalance: { decrement: order.amount },
-        balance: { increment: order.amount },
+        pendingBalance: { decrement: releaseAmount },
+        balance: { increment: releaseAmount },
       },
     });
 
@@ -133,19 +145,20 @@ async function confirmOrder(orderId, buyerId) {
     await tx.transaction.create({
       data: {
         userId: order.sellerId,
-        amount: order.amount,
-        type: "release",
-        status: "completed",
+        amount: releaseAmount,
+        type: 'release',
+        status: 'completed',
       },
     });
 
-    // 4. Add system message
+    // 4. Add system message (shows both amounts)
+    const commission = order.amount - releaseAmount;
     await tx.message.create({
       data: {
         orderId,
-        senderId: "system",
-        text: "Order has been confirmed. Funds released to seller.",
-        type: "system",
+        senderId: 'system',
+        text: `🎉 Order confirmed! Seller receives ⭐ ${releaseAmount} (platform fee: ⭐ ${commission}).`,
+        type: 'system',
       },
     });
 
@@ -173,7 +186,7 @@ async function getOrderById(orderId, userId) {
   const userIdStr = String(userId);
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { lot: true, buyer: true, seller: true },
+    include: { lot: true, buyer: true, seller: true, review: true },
   });
   if (!order) throw new AppError(404, "Order not found");
   if (String(order.buyerId) !== userIdStr && String(order.sellerId) !== userIdStr) {

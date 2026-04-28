@@ -17,10 +17,12 @@ model User {
   balance        Int      @default(0)
   pendingBalance Int      @default(0) @map("pending_balance")
 
-  lots           Lot[]    @relation("SellerLots")
-  buyOrders      Order[]  @relation("BuyerOrders")
-  sellOrders     Order[]  @relation("SellerOrders")
-  transactions   Transaction[]
+  lots            Lot[]    @relation("SellerLots")
+  buyOrders       Order[]  @relation("BuyerOrders")
+  sellOrders      Order[]  @relation("SellerOrders")
+  transactions    Transaction[]
+  reviewsGiven    Review[] @relation("ReviewsGiven")
+  reviewsReceived Review[] @relation("ReviewsReceived")
 
   @@map("users")
 }
@@ -32,6 +34,7 @@ model Lot {
   price            Int
   category         String
   subscribersCount Int?     @map("subscribers_count")
+  stockCount       Int      @default(1) @map("stock_count") // number of accounts available
   userId           String   @map("user_id")
   isSold           Boolean  @default(false) @map("is_sold")
   createdAt        DateTime @default(now()) @map("created_at")
@@ -54,15 +57,17 @@ enum OrderStatus {
 }
 
 model Order {
-  id          String      @id @default(cuid())
-  lotId       String      @map("lot_id")
-  buyerId     String      @map("buyer_id")
-  sellerId    String      @map("seller_id")
-  status      OrderStatus @default(pending)
-  amount      Int
-  isConfirmed Boolean     @default(false) @map("is_confirmed")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  completedAt DateTime?   @map("completed_at")
+  id           String      @id @default(cuid())
+  lotId        String      @map("lot_id")
+  buyerId      String      @map("buyer_id")
+  sellerId     String      @map("seller_id")
+  status       OrderStatus @default(pending)
+  amount       Int                              // total buyer pays (price * quantity)
+  sellerAmount Int         @default(0) @map("seller_amount") // amount after 10% commission
+  quantity     Int         @default(1)          // number of accounts purchased
+  isConfirmed  Boolean     @default(false) @map("is_confirmed")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  completedAt  DateTime?   @map("completed_at")
 
   lot         Lot         @relation(fields: [lotId], references: [id])
   buyer       User        @relation("BuyerOrders", fields: [buyerId], references: [id])
@@ -70,6 +75,7 @@ model Order {
   messages    Message[]
   payments    Payment[]
   dispute     Dispute?
+  review      Review?
 
   @@index([buyerId])
   @@index([sellerId])
@@ -79,12 +85,30 @@ model Order {
   @@map("orders")
 }
 
+model Review {
+  id         String   @id @default(cuid())
+  orderId    String   @unique @map("order_id")
+  reviewerId String   @map("reviewer_id")
+  sellerId   String   @map("seller_id")
+  rating     Int      // 1-5
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  order      Order    @relation(fields: [orderId], references: [id])
+  reviewer   User     @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  seller     User     @relation("ReviewsReceived", fields: [sellerId], references: [id])
+
+  @@index([sellerId])
+  @@index([createdAt])
+  @@map("reviews")
+}
+
 model Dispute {
   id         String    @id @default(cuid())
   orderId    String    @unique @map("order_id")
   openedBy   String    @map("opened_by")
   reason     String
-  status     String    @default("open") // open, resolved
+  status     String    @default("open")
   createdAt  DateTime  @default(now()) @map("created_at")
   resolvedAt DateTime? @map("resolved_at")
 
@@ -98,7 +122,7 @@ model Message {
   orderId   String   @map("order_id")
   senderId  String   @map("sender_id")
   text      String
-  type      String   @default("text") // text, system
+  type      String   @default("text")
   createdAt DateTime @default(now()) @map("created_at")
 
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -112,7 +136,7 @@ model Transaction {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   amount    Int
-  type      String   // deposit, hold, release, withdraw
+  type      String
   status    String   @default("completed")
   createdAt DateTime @default(now()) @map("created_at")
 

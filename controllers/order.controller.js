@@ -4,6 +4,7 @@ const { createOrder, listMyOrders, listBuyerOrders, getOrderById, confirmOrder }
 // Схема залишається такою ж, лот — це основа замовлення/чату
 const createOrderBodySchema = z.object({
   lotId: z.string().min(1),
+  quantity: z.number().int().min(1).optional(),
 });
 
 /**
@@ -13,11 +14,10 @@ const createOrderBodySchema = z.object({
 async function create(req, res, next) {
   try {
     const userId = req.user.sub || req.user.id;
-    const { lotId } = req.validated.body;
+    const { lotId, quantity } = req.validated.body;
     
-    // createOrder має бути розумним: якщо чат уже існує (pending), 
-    // він має повернути існуючий, а не створювати дублікат.
-    const order = await createOrder(userId, lotId);
+    // createOrder has been updated to handle quantity and commission
+    const order = await createOrder(userId, lotId, quantity);
     
     res.status(201).json({ success: true, order });
   } catch (e) {

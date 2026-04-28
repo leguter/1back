@@ -13,6 +13,7 @@ const chatController = require("./controllers/chat.controller");
 const userController = require("./controllers/user.controller");
 const balanceController = require("./controllers/balance.controller");
 const disputeController = require("./controllers/dispute.controller");
+const reviewController = require("./controllers/review.controller");
 
 
 const app = express();
@@ -114,13 +115,20 @@ app.post(
 );
 app.post("/api/payments/webhook", paymentController.webhook);
 
-// Disputes
+// Disputes + Reviews
 app.post(
   "/api/orders/:orderId/dispute",
   requireAuth,
   validateBody(disputeController.openDisputeBodySchema),
   disputeController.open
 );
+app.post(
+  "/api/orders/:orderId/review",
+  requireAuth,
+  validateBody(reviewController.createReviewBodySchema),
+  reviewController.submitReview
+);
+app.get("/api/users/:sellerId/reviews", reviewController.sellerReviews);
 
 // Chat
 app.get("/api/chats", requireAuth, chatController.getChats);
