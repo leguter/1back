@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const { createInvoiceLinkForOrder, processTelegramUpdate, manualConfirmPayment } = require("../services/payment.service");
+const { AppError } = require("../utils/AppError");
 
 const createPaymentBodySchema = z.object({
   orderId: z.string().min(1),
@@ -22,7 +23,7 @@ async function manualConfirm(req, res, next) {
   try {
     const { getEnv } = require("../config/env");
     if (getEnv().nodeEnv === "production") {
-      throw new require("../utils/AppError").AppError(403, "Not allowed in production");
+      throw new AppError(403, "Not allowed in production");
     }
     const result = await manualConfirmPayment(req.validated.body.orderId, req.user.sub || req.user.id);
     res.json({ success: true, ...result });

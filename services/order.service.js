@@ -67,13 +67,7 @@ async function _handlePaymentTx(orderId, tx) {
     data: { status: "paid" },
   });
 
-  // 2. Mark lot as sold
-  await tx.lot.update({
-    where: { id: order.lotId },
-    data: { isSold: true },
-  });
-
-  // 3. Add to seller's pending balance (only the sellerAmount, not full amount)
+  // 2. Add to seller's pending balance (only the sellerAmount, not full amount)
   await tx.user.update({
     where: { id: order.sellerId },
     data: { pendingBalance: { increment: order.sellerAmount } },
@@ -98,15 +92,11 @@ async function _handlePaymentTx(orderId, tx) {
     await tx.lot.update({ where: { id: order.lotId }, data: { isSold: true } });
   }
 
-  // 6. Add system message
-  await tx.message.create({
-    data: {
-      orderId,
-      senderId: 'system',
-      text: `✅ Payment received (${order.quantity} account${order.quantity > 1 ? 's' : ''}). Funds held in escrow.`,
-      type: 'system',
-    },
-  });
+  // 6. Send automated confirmation messages
+  await chatService.sendSystemMessage(
+    order.id,
+    `💰 Payment of ⭐ ${order.amount} received (${order.quantity} account${order.quantity > 1 ? 's' : ''})! Funds are held in escrow.`
+  );
 
   return updatedOrder;
 }
