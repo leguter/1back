@@ -20,6 +20,10 @@ async function create(req, res, next) {
 
 async function manualConfirm(req, res, next) {
   try {
+    const { getEnv } = require("../config/env");
+    if (getEnv().nodeEnv === "production") {
+      throw new require("../utils/AppError").AppError(403, "Not allowed in production");
+    }
     const result = await manualConfirmPayment(req.validated.body.orderId, req.user.sub || req.user.id);
     res.json({ success: true, ...result });
   } catch (e) {
@@ -34,6 +38,16 @@ async function manualConfirm(req, res, next) {
  */
 async function webhook(req, res) {
   try {
+    const { getEnv } = require("../config/env");
+    const secretToken = req.headers['x-telegram-bot-api-secret-token'];
+    const expectedSecret = getEnv().telegramWebhookSecret;
+    
+    // Validate secret token if we have configured one
+    if (expectedSecret && secretToken !== expectedSecret) {
+      console.warn("Unauthorized webhook attempt - Invalid Secret Token");
+      return res.status(403).json({ ok: false, error: "Unauthorized" });
+    }
+
     const update = req.body;
     if (!update || typeof update !== "object") {
       return res.status(200).json({ ok: true });

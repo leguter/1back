@@ -16,7 +16,7 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   balance        Int      @default(0)
   pendingBalance Int      @default(0) @map("pending_balance")
-  
+
   lots           Lot[]    @relation("SellerLots")
   buyOrders      Order[]  @relation("BuyerOrders")
   sellOrders     Order[]  @relation("SellerOrders")
@@ -35,10 +35,13 @@ model Lot {
   userId           String   @map("user_id")
   isSold           Boolean  @default(false) @map("is_sold")
   createdAt        DateTime @default(now()) @map("created_at")
-  
+
   seller      User     @relation("SellerLots", fields: [userId], references: [id])
   orders      Order[]
 
+  @@index([createdAt])
+  @@index([userId])
+  @@index([isSold])
   @@map("lots")
 }
 
@@ -47,6 +50,7 @@ enum OrderStatus {
   paid
   completed
   cancelled
+  disputed
 }
 
 model Order {
@@ -59,17 +63,34 @@ model Order {
   isConfirmed Boolean     @default(false) @map("is_confirmed")
   createdAt   DateTime    @default(now()) @map("created_at")
   completedAt DateTime?   @map("completed_at")
-  
+
   lot         Lot         @relation(fields: [lotId], references: [id])
   buyer       User        @relation("BuyerOrders", fields: [buyerId], references: [id])
   seller      User        @relation("SellerOrders", fields: [sellerId], references: [id])
   messages    Message[]
   payments    Payment[]
+  dispute     Dispute?
 
   @@index([buyerId])
   @@index([sellerId])
   @@index([lotId])
+  @@index([status])
+  @@index([createdAt])
   @@map("orders")
+}
+
+model Dispute {
+  id         String    @id @default(cuid())
+  orderId    String    @unique @map("order_id")
+  openedBy   String    @map("opened_by")
+  reason     String
+  status     String    @default("open") // open, resolved
+  createdAt  DateTime  @default(now()) @map("created_at")
+  resolvedAt DateTime? @map("resolved_at")
+
+  order      Order     @relation(fields: [orderId], references: [id])
+
+  @@map("disputes")
 }
 
 model Message {
@@ -79,9 +100,11 @@ model Message {
   text      String
   type      String   @default("text") // text, system
   createdAt DateTime @default(now()) @map("created_at")
-  
+
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([orderId])
+  @@index([createdAt])
   @@map("messages")
 }
 
@@ -92,9 +115,11 @@ model Transaction {
   type      String   // deposit, hold, release, withdraw
   status    String   @default("completed")
   createdAt DateTime @default(now()) @map("created_at")
-  
+
   user      User     @relation(fields: [userId], references: [id])
 
+  @@index([userId])
+  @@index([createdAt])
   @@map("transactions")
 }
 
@@ -110,4 +135,3 @@ model Payment {
   @@index([orderId])
   @@map("payments")
 }
-

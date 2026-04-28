@@ -182,6 +182,39 @@ async function getOrderById(orderId, userId) {
   return order;
 }
 
+/**
+ * Auto-confirm paid orders older than `hoursThreshold` that have no open dispute.
+ * Called by a background cron so sellers are never locked out permanently.
+ */
+async function autoConfirmPaidOrders(hoursThreshold = 72) {
+  const cutoff = new Date(Date.now() - hoursThreshold * 60 * 60 * 1000);
+
+  const staleOrders = await prisma.order.findMany({
+    where: {
+      status: 'paid',
+      createdAt: { lte: cutoff },
+      dispute: { is: null }, // skip orders that have a dispute open
+    },
+    select: { id: true, buyerId: true },
+  });
+
+  let confirmed = 0;
+  for (const order of staleOrders) {
+    try {
+      await confirmOrder(order.id, order.buyerId);
+      confirmed++;
+      console.log(`[auto-confirm] Order ${order.id} auto-confirmed after ${hoursThreshold}h`);
+    } catch (e) {
+      console.warn(`[auto-confirm] Failed to confirm order ${order.id}:`, e.message);
+    }
+  }
+
+  if (confirmed > 0) {
+    console.log(`[auto-confirm] Auto-confirmed ${confirmed} stale paid order(s)`);
+  }
+  return confirmed;
+}
+
 module.exports = {
   createOrder,
   handlePayment,
@@ -190,4 +223,5 @@ module.exports = {
   listMyOrders,
   listBuyerOrders,
   getOrderById,
+  autoConfirmPaidOrders,
 };

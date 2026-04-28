@@ -3,6 +3,7 @@ const cors = require("cors");
 const { validateBody } = require("./middlewares/validate.middleware");
 const { requireAuth } = require("./middlewares/auth.middleware");
 const { notFoundHandler, errorHandler } = require("./middlewares/error.middleware");
+const rateLimit = require("express-rate-limit");
 
 const authController = require("./controllers/auth.controller");
 const lotController = require("./controllers/lot.controller");
@@ -11,6 +12,7 @@ const paymentController = require("./controllers/payment.controller");
 const chatController = require("./controllers/chat.controller");
 const userController = require("./controllers/user.controller");
 const balanceController = require("./controllers/balance.controller");
+const disputeController = require("./controllers/dispute.controller");
 
 
 const app = express();
@@ -38,9 +40,24 @@ app.use(cors({
 
 app.use(express.json());
 
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300, // Limit each IP to 300 requests per windowMs
+  message: { success: false, error: "Too many requests, please try again later." }
+});
+app.use("/api", limiter);
+
+const strictLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // Limit each IP to 10 requests per minute
+  message: { success: false, error: "Too many requests to this endpoint." }
+});
+
 // Auth
 app.post(
   "/api/auth/telegram",
+  strictLimiter,
   validateBody(authController.telegramAuthBodySchema),
   authController.telegramAuth
 );
@@ -89,6 +106,14 @@ app.post(
 );
 app.post("/api/payments/webhook", paymentController.webhook);
 
+// Disputes
+app.post(
+  "/api/orders/:orderId/dispute",
+  requireAuth,
+  validateBody(disputeController.openDisputeBodySchema),
+  disputeController.open
+);
+
 // Chat
 app.get("/api/chats", requireAuth, chatController.getChats);
 app.post("/api/chat/:orderId/typing", requireAuth, chatController.setTyping);
@@ -107,6 +132,7 @@ app.get("/api/transactions", requireAuth, balanceController.getTransactions);
 app.get("/api/withdraw-eligibility", requireAuth, balanceController.getEligibility);
 app.post(
   "/api/withdraw",
+  strictLimiter,
   requireAuth,
   validateBody(balanceController.withdrawBodySchema),
   balanceController.withdraw

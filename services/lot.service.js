@@ -49,6 +49,12 @@ async function updateLot(lotId, userId, data) {
   if (lot.userId !== String(userId)) throw new AppError(403, 'You are not the owner of this lot');
   if (lot.isSold) throw new AppError(409, 'Cannot edit a sold lot');
 
+  // Prevent editing while buyer has an active order
+  const activeOrder = await prisma.order.findFirst({
+    where: { lotId, status: { in: ['pending', 'paid', 'disputed'] } },
+  });
+  if (activeOrder) throw new AppError(409, 'Cannot edit a lot with an active order in progress', 'lot_locked');
+
   assertNoProfanity(data.title, data.description);
   assertSubscribersCount(data.category, data.subscribersCount);
 
@@ -70,6 +76,12 @@ async function deleteLot(lotId, userId) {
   if (!lot) throw new AppError(404, 'Lot not found');
   if (lot.userId !== String(userId)) throw new AppError(403, 'You are not the owner of this lot');
   if (lot.isSold) throw new AppError(409, 'Cannot delete a sold lot');
+
+  // Prevent deleting while buyer has an active order
+  const activeOrder = await prisma.order.findFirst({
+    where: { lotId, status: { in: ['pending', 'paid', 'disputed'] } },
+  });
+  if (activeOrder) throw new AppError(409, 'Cannot delete a lot with an active order in progress', 'lot_locked');
 
   await prisma.lot.delete({ where: { id: lotId } });
   return { deleted: true };

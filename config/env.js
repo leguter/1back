@@ -15,6 +15,7 @@ function loadEnv() {
     jwtSecret: process.env.JWT_SECRET,
     baseUrl: (process.env.BASE_URL ?? "").replace(/\/$/, ""),
     nodeEnv: process.env.NODE_ENV || "development",
+    telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET,
   };
   return cached;
 }

@@ -103,15 +103,21 @@ async function withdrawBalance(userId, amount, mode) {
   const netAmount = amount - fee;   // what user actually receives
 
   return prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id } });
-    if (!user || user.balance < amount) {
-      throw new AppError(400, "Insufficient balance");
-    }
-
-    const updatedUser = await tx.user.update({
-      where: { id },
+    // Atomically decrement balance, ensuring it doesn't drop below 0
+    const updateResult = await tx.user.updateMany({
+      where: { 
+        id,
+        balance: { gte: amount } // CRITICAL: only update if balance >= amount
+      },
       data: { balance: { decrement: amount } },
     });
+
+    if (updateResult.count === 0) {
+      throw new AppError(400, "Insufficient balance or concurrent transaction");
+    }
+
+    // Fetch the updated user state to return
+    const updatedUser = await tx.user.findUnique({ where: { id } });
 
     await tx.transaction.create({
       data: {
