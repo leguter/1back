@@ -45,7 +45,7 @@ async function createInvoiceLinkForOrder(orderId, userId) {
     description,
     payload,
     currency: "XTR",
-    prices: [{ label: order.lot.title.slice(0, 50), amount: order.lot.price }],
+    prices: [{ label: `${order.lot.title.slice(0, 40)} x${order.quantity}`, amount: order.amount }],
   });
 
   return { invoiceLink, orderId: order.id };
@@ -83,11 +83,10 @@ async function handlePreCheckoutQuery(query) {
     return;
   }
 
-  if (
     !order ||
     order.status !== "pending" ||
     order.lot.isSold ||
-    order.lot.price !== totalAmount
+    order.amount !== totalAmount
   ) {
     await telegramApi("answerPreCheckoutQuery", {
       pre_checkout_query_id: query.id,
@@ -125,7 +124,7 @@ async function handleSuccessfulPayment(sp, payerTelegramId) {
     if (!order) throw new Error("order_not_found");
     if (String(payerTelegramId) !== order.buyerId) throw new Error("payer_mismatch");
     if (order.status === "paid" || order.status === "completed") return { handled: true };
-    if (order.lot.price !== totalAmount) throw new Error("amount_mismatch");
+    if (order.amount !== totalAmount) throw new Error("amount_mismatch");
 
     await prisma.$transaction(async (tx) => {
       const existing = await tx.payment.findUnique({
