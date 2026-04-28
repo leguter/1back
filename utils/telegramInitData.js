@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 
-const AUTH_MAX_AGE_SEC = 86400;
+const AUTH_MAX_AGE_SEC = 7 * 24 * 60 * 60; // 7 days
 
 /**
  * Validates Telegram Web App initData (query string).
@@ -65,9 +65,8 @@ function parseAndVerifyInitData(initDataString, botToken) {
   }
 
   const firstName = typeof user.first_name === "string" ? user.first_name : "";
-  if (!firstName) {
-    return { ok: false, error: "missing_first_name" };
-  }
+  // Note: first_name is optional — Telegram allows accounts with no first name set.
+  // Do NOT reject auth based on first_name absence.
 
   return {
     ok: true,

@@ -17,6 +17,10 @@ const disputeController = require("./controllers/dispute.controller");
 
 const app = express();
 
+// Trust Render's reverse proxy so rate limiting uses real client IPs
+// (without this, ALL users appear as the same IP and share one rate limit bucket)
+app.set('trust proxy', 1);
+
 const ALLOWED_ORIGINS = [
   'https://account-martk.vercel.app',
   'https://account-martk-cxkpl5kec-leguters-projects.vercel.app',
@@ -43,14 +47,18 @@ app.use(express.json());
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // Limit each IP to 300 requests per windowMs
+  max: 500, // 500 req per real IP per 15 min
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { success: false, error: "Too many requests, please try again later." }
 });
 app.use("/api", limiter);
 
 const strictLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 10, // Limit each IP to 10 requests per minute
+  max: 30, // 30 req per real IP per minute (enough for retries + normal use)
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { success: false, error: "Too many requests to this endpoint." }
 });
 

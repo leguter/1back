@@ -9,7 +9,11 @@ async function authenticateTelegram(initData) {
   const result = parseAndVerifyInitData(initData, telegramBotToken);
   if (!result.ok) {
     console.warn("Telegram initData rejected:", result.error);
-    throw new AppError(403, "Invalid or expired Telegram initData", "invalid_telegram_data");
+    throw new AppError(
+      403,
+      `Invalid or expired Telegram initData (reason: ${result.error})`,
+      "invalid_telegram_data"
+    );
   }
 
   const { id, username, first_name } = result.user;
