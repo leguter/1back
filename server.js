@@ -1,5 +1,11 @@
 const app = require("./app");
 const { autoConfirmPaidOrders } = require("./services/order.service");
+const { ensureSupportUser } = require("./services/auth.service");
+
+// Initialize support user on startup
+ensureSupportUser()
+  .then(() => console.log("Support user verified"))
+  .catch(err => console.error("Failed to verify support user:", err));
 
 const PORT = Number(process.env.PORT) || 4000;
 

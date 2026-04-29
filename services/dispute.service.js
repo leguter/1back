@@ -18,6 +18,13 @@ async function openDispute(orderId, userId, reason) {
   if (existing) throw new AppError(409, 'A dispute is already open for this order');
 
   const supportUser = await ensureSupportUser();
+  const { sendPushNotification } = require('../utils/telegram');
+
+  // Notify support immediately via Telegram
+  sendPushNotification(
+    supportUser.id,
+    `🚨 <b>New Dispute Opened</b>\nOrder ID: ${orderId}\nReason: ${reason}`
+  ).catch(() => {});
 
   return prisma.$transaction(async (tx) => {
     const dispute = await tx.dispute.create({

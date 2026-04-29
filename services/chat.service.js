@@ -81,8 +81,11 @@ async function sendMessage(orderId, senderId, text, type = 'text') {
     },
   });
 
-  // ── Push notification to the other participant ─────────────────────────────
+  // ── Push notification ──────────────────────────────────────────────
   if (type === 'text' && senderId && senderId !== 'system') {
+    const isSenderSupport = isSupport;
+
+    // Notify the other "main" participant
     const recipientId = String(order.buyerId) === String(senderId)
       ? order.sellerId
       : order.buyerId;
@@ -90,11 +93,21 @@ async function sendMessage(orderId, senderId, text, type = 'text') {
     const lotTitle = order.lot?.title ?? 'your order';
     const preview = text.length > 100 ? text.slice(0, 97) + '…' : text;
 
-    // Fire-and-forget — do NOT await so the response is never delayed
     sendPushNotification(
       recipientId,
       `💬 <b>New message</b> in <i>${lotTitle}</i>\n\n${preview}`,
     ).catch(() => {});
+
+    // If the chat is disputed and sender is NOT support, notify support
+    if (order.status === 'disputed' && !isSenderSupport) {
+      const { ensureSupportUser } = require('./auth.service');
+      ensureSupportUser().then(support => {
+        sendPushNotification(
+          support.id,
+          `⚖️ <b>Dispute Update</b> in <i>${lotTitle}</i>\n\n${preview}`,
+        ).catch(() => {});
+      });
+    }
   }
 
   return message;
@@ -107,9 +120,16 @@ async function sendSystemMessage(orderId, text) {
 // ─── Chat list (used by GET /api/chats) ────────────────────────────────────
 
 async function getChatList(userId) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const isSupport = user?.username === SUPPORT_USERNAME;
+
   const orders = await prisma.order.findMany({
     where: {
-      OR: [{ buyerId: userId }, { sellerId: userId }],
+      OR: [
+        { buyerId: userId },
+        { sellerId: userId },
+        ...(isSupport ? [{ status: 'disputed' }] : []),
+      ],
     },
     orderBy: { createdAt: 'desc' },
     include: {

@@ -95,7 +95,7 @@ async function _handlePaymentTx(orderId, tx) {
   // 6. Send automated confirmation messages
   await chatService.sendSystemMessage(
     order.id,
-    `💰 Payment of ⭐ ${order.amount} received (${order.quantity} account${order.quantity > 1 ? 's' : ''})! Funds are held in escrow.`
+    `✅ <b>Payment completed</b> for ${order.quantity} item${order.quantity > 1 ? 's' : ''}.\nTotal: ⭐ ${order.amount}\n\nFunds are held in escrow. Seller, please provide the items in this chat.`
   );
 
   return updatedOrder;
