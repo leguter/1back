@@ -2,6 +2,8 @@ const { prisma } = require('../utils/prisma');
 const { AppError } = require('../utils/AppError');
 const { sendPushNotification } = require('../utils/telegram');
 
+const SUPPORT_USERNAME = 'StarcSupport';
+
 // ─── Typing indicator (in-memory, no DB) ────────────────────────────────────
 // key: `${orderId}:${userId}` → expiry timestamp (ms)
 const typingStore = new Map();
@@ -39,11 +41,19 @@ async function listMessages(orderId, userId) {
   const userIdStr = String(userId);
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) throw new AppError(404, 'Order not found');
-  if (String(order.buyerId) !== userIdStr && String(order.sellerId) !== userIdStr) {
+  const user = await prisma.user.findUnique({ where: { id: userIdStr } });
+  const isSupport = user?.username === SUPPORT_USERNAME;
+
+  if (!isSupport && String(order.buyerId) !== userIdStr && String(order.sellerId) !== userIdStr) {
     throw new AppError(403, 'Access denied');
   }
   return prisma.message.findMany({
     where: { orderId },
+    include: {
+      sender: {
+        select: { username: true, firstName: true }
+      }
+    },
     orderBy: { createdAt: 'asc' },
   });
 }
@@ -55,7 +65,10 @@ async function sendMessage(orderId, senderId, text, type = 'text') {
   });
   if (!order) throw new AppError(404, 'Order not found');
 
-  if (type === 'text' && order.buyerId !== senderId && order.sellerId !== senderId) {
+  const user = await prisma.user.findUnique({ where: { id: senderId } });
+  const isSupport = user?.username === SUPPORT_USERNAME;
+
+  if (type === 'text' && !isSupport && order.buyerId !== senderId && order.sellerId !== senderId) {
     throw new AppError(403, 'Only participants can send messages');
   }
 
@@ -124,4 +137,5 @@ module.exports = {
   getChatList,
   markTyping,
   getOtherTyping,
+  SUPPORT_USERNAME,
 };

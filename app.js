@@ -122,6 +122,16 @@ app.post(
   validateBody(disputeController.openDisputeBodySchema),
   disputeController.open
 );
+app.patch(
+  "/api/orders/:orderId/resolve",
+  requireAuth,
+  disputeController.resolve
+);
+app.get(
+  "/api/support/chats-with-complaints",
+  requireAuth,
+  disputeController.listDisputed
+);
 app.post(
   "/api/orders/:orderId/review",
   requireAuth,

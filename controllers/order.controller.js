@@ -1,5 +1,6 @@
 const { z } = require("zod");
-const { createOrder, listMyOrders, listBuyerOrders, getOrderById, confirmOrder } = require("../services/order.service");
+const { prisma } = require("../utils/prisma");
+const { createOrder, listMyOrders, listBuyerOrders, getOrderById, confirmOrder, openDispute, resolveDispute, listDisputedOrders } = require("../services/order.service");
 
 // Схема залишається такою ж, лот — це основа замовлення/чату
 const createOrderBodySchema = z.object({

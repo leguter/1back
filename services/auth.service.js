@@ -43,4 +43,21 @@ async function authenticateTelegram(initData) {
   };
 }
 
-module.exports = { authenticateTelegram };
+async function ensureSupportUser() {
+  const username = "StarcSupport";
+  const id = "system_support"; // Internal ID for support
+
+  return prisma.user.upsert({
+    where: { id },
+    create: {
+      id,
+      username,
+      firstName: "Support",
+    },
+    update: {
+      username,
+    },
+  });
+}
+
+module.exports = { authenticateTelegram, ensureSupportUser };
